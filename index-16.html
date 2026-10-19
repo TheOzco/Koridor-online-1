@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#f4f6f8">
+<title>کوریدور آنلاین</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+:root{--bg:#f4f6f8;--ink:#17212b;--line:#cbd3dc;--blue:#2878d0;--red:#df5b5b;--wall:#343d49}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Tahoma,Arial,sans-serif;min-height:100vh}
+.wrap{max-width:620px;margin:auto;padding:16px 12px 28px}
+h1{text-align:center;font-size:25px;margin:8px 0 5px} .sub{text-align:center;color:#647181;font-size:13px;margin:0 0 18px}
+.panel{background:#fff;border:1px solid #e0e5eb;border-radius:16px;padding:14px;margin:12px 0;box-shadow:0 3px 12px #1825360a}
+label{font-size:13px;color:#596575;display:block;margin-bottom:6px}
+input,button{font:inherit;border-radius:10px;padding:11px;border:1px solid #ccd4dd;min-width:0}
+input{width:100%;background:#fff;color:#17212b}
+button{cursor:pointer;background:#17212b;color:#fff;border:0;font-weight:700}
+button.secondary{background:#edf1f5;color:#263442;border:1px solid #d7dee6}
+button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}
+#status{font-size:13px;text-align:center;margin-top:10px;color:#687485;line-height:1.8}
+#game{display:none}
+.topline{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.pill{font-size:13px;padding:8px 10px;background:#edf1f5;border-radius:10px}
+#turn{font-weight:bold}
+.players{display:flex;gap:8px;margin:10px 0}
+.player{flex:1;background:#fff;border:2px solid transparent;border-radius:12px;padding:9px;text-align:center;font-size:13px}
+.player.active{border-color:#2878d0;background:#edf6ff}
+.dot{display:inline-block;width:13px;height:13px;border-radius:50%;vertical-align:middle;margin-left:5px;border:1px solid #777}
+#board{width:min(94vw,500px);height:min(94vw,500px);max-width:500px;max-height:500px;margin:12px auto;display:grid;grid-template-columns:repeat(17,minmax(0,1fr));grid-template-rows:repeat(17,minmax(0,1fr));gap:0;background:#fff;border:2px solid #d5dce4;border-radius:8px;padding:4px;touch-action:manipulation}
+.cell{background:#fff;border:1px solid #e0e5ea;border-radius:3px;display:flex;align-items:center;justify-content:center;min-width:0;min-height:0}
+.cell:active{background:#eaf3ff}
+.gap{position:relative;background:#fff;min-width:0;min-height:0;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.gap.hslot{border-top:1px dashed #d2d9e0;border-bottom:1px dashed #d2d9e0}
+.gap.vslot{border-right:1px dashed #d2d9e0;border-left:1px dashed #d2d9e0}
+.gap.anchor::after{content:"";position:absolute;width:100%;height:100%;border-radius:3px;background:#f0f3f6;opacity:.55}
+.gap.anchor:active::after{background:#c9e1ff;opacity:1}
+.wallH{position:absolute;z-index:3;left:0;right:0;top:0;bottom:0;background:var(--wall);border-radius:3px;box-shadow:0 1px 2px #0003}
+.wallV{position:absolute;z-index:3;top:0;bottom:0;left:0;right:0;background:var(--wall);border-radius:3px;box-shadow:0 1px 2px #0003}
+.pawn{width:76%;height:76%;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px #0005;z-index:2}
+.pawn.one{background:#2878d0}.pawn.two{background:#df5b5b}
+#hint{text-align:center;color:#536171;font-size:12px;line-height:1.9;margin:8px 0}
+.actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.actions button{flex:1;min-width:120px}
+#notice{text-align:center;font-weight:bold;font-size:14px;margin:8px 0;min-height:22px}
+.small{font-size:11px;color:#718091;line-height:1.8}
+@media(min-width:560px){#board{width:500px;height:500px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧩 کوریدور آنلاین</h1>
+  <p class="sub">دو نفره · اتصال مستقیم با PeerJS · هر بازیکن ۱۰ دیوار</p>
+
+  <section class="panel" id="connectPanel">
+    <div style="font-weight:bold;margin-bottom:12px">۱) اتصال دو دستگاه</div>
+    <div class="row">
+      <button id="createBtn">ساخت بازی جدید</button>
+      <button id="refreshBtn" class="secondary">اتصال مجدد</button>
+    </div>
+    <div id="myIdWrap" style="display:none;margin-top:13px">
+      <label>کد این دستگاه را برای بازیکن دوم بفرست</label>
+      <div class="row"><input id="myId" readonly><button id="copyBtn" class="secondary" style="flex:0 0 auto">کپی کد</button></div>
+    </div>
+    <div style="height:1px;background:#e7ebef;margin:15px 0"></div>
+    <label for="peerId">اگر دوستت بازی را ساخته، کد او را وارد کن</label>
+    <div class="row"><input id="peerId" placeholder="کد بازیکن اول را اینجا وارد کن"><button id="joinBtn">وصل شو</button></div>
+    <div id="status">برای شروع، در یک دستگاه «ساخت بازی جدید» و در دستگاه دوم «وصل شو» را بزنید.</div>
+    <p class="small">هر دو دستگاه باید اینترنت داشته باشند. اگر اتصال برقرار نشد، صفحه را تازه‌سازی کنید و دوباره امتحان کنید.</p>
+  </section>
+
+  <section id="game" class="panel">
+    <div class="topline"><span class="pill" id="role">بازیکن</span><span class="pill">دیوارهای باقی‌مانده: <b id="wallCount">۱۰ - ۱۰</b></span></div>
+    <div class="players">
+      <div class="player" id="p1"><span class="dot" style="background:#2878d0"></span>بازیکن آبی <b id="w1">۱۰</b></div>
+      <div class="player" id="p2"><span class="dot" style="background:#df5b5b"></span>بازیکن قرمز <b id="w2">۱۰</b></div>
+    </div>
+    <div id="turn">نوبت بازیکن آبی</div>
+    <div id="board" aria-label="صفحه بازی کوریدور"></div>
+    <div id="notice">برای حرکت، خانه مقصد را لمس کن؛ برای دیوار، فضای خالی بین خانه‌ها را لمس کن.</div>
+    <div id="hint">هر دیوار دو خانه را از نظر طول پوشش می‌دهد. لمس فضای خالی بین ردیف‌ها دیوار افقی و بین ستون‌ها دیوار عمودی می‌گذارد؛ نیازی به تغییر حالت نیست.</div>
+    <div class="actions"><button id="newGameBtn" class="secondary">شروع دوباره</button><button id="leaveBtn" class="secondary">قطع اتصال</button></div>
+  </section>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let peer=null, conn=null, isHost=false, myPlayer=0, state=null, connecting=false;
+  const N=9;
+  function initialState(){return {pawns:[{r:8,c:4},{r:0,c:4}],walls:[[],[]],turn:0,over:false,winner:null};}
+  function setStatus(t){$('status').textContent=t;}
+  function makePeer(){
+    if(peer){try{peer.destroy()}catch(e){}}
+    peer=new Peer();
+    peer.on('open', id=>{ $('myId').value=id; $('myIdWrap').style.display='block'; setStatus('آماده اتصال. کد را برای دستگاه دوم بفرست.'); });
+    peer.on('error', err=>{setStatus('خطای اتصال: '+(err.type||err.message||'نامشخص')+' — دوباره تلاش کنید.');});
+    peer.on('disconnected',()=>setStatus('ارتباط با سرور اتصال قطع شد؛ اتصال مجدد را بزنید.'));
+    peer.on('connection', c=>{ if(conn){c.close();return;} attach(c,true); });
+  }
+  function attach(c, hostSide){
+    conn=c; isHost=hostSide; myPlayer=hostSide?0:1; connecting=true;
+    c.on('open',()=>{
+      connecting=false;
+      $('connectPanel').style.display='none'; $('game').style.display='block';
+      if(isHost){state=initialState();send({type:'state',state});}
+      else {setStatus('متصل');}
+      render();
+    });
+    c.on('data', msg=>{
+      if(!msg||typeof msg!=='object')return;
+      if(isHost){
+        if(msg.type==='action' && !state?.over){handleAction(msg.action,1);}
+        if(msg.type==='restart'){state=initialState();send({type:'state',state});render();}
+      }else{
+        if(msg.type==='state'){state=msg.state;render();}
+        if(msg.type==='info')notice(msg.text);
+      }
+    });
+    c.on('close',()=>{notice('ارتباط با بازیکن دیگر قطع شد.');});
+    c.on('error',()=>notice('خطا در ارتباط دو دستگاه.'));
+  }
+  function send(msg){if(conn&&conn.open)conn.send(msg);}
+  function notice(t){$('notice').textContent=t;}
+  $('createBtn').onclick=()=>{setStatus('در حال ساخت بازی…');makePeer();};
+  $('refreshBtn').onclick=()=>{if(conn){try{conn.close()}catch(e){}};makePeer();setStatus('در حال اتصال مجدد…');};
+  $('copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText($('myId').value);setStatus('کد بازی کپی شد.');}catch(e){$('myId').select();document.execCommand('copy');setStatus('کد بازی انتخاب/کپی شد.');}};
+  $('joinBtn').onclick=()=>{
+    const id=$('peerId').value.trim(); if(!id){setStatus('اول کد دستگاه اول را وارد کن.');return;}
+    if(peer){try{peer.destroy()}catch(e){}}
+    setStatus('در حال اتصال به بازی…'); peer=new Peer();
+    peer.on('open',()=>{const c=peer.connect(id,{reliable:true});attach(c,false);});
+    peer.on('error',err=>setStatus('اتصال برقرار نشد: '+(err.type||err.message||'خطا')+'. کد را بررسی و دوباره تلاش کن.'));
+  };
+  function wallKey(w){return w.o+':'+w.r+':'+w.c;}
+  function hasWall(o,r,c){return state.walls.some(arr=>arr.some(w=>w.o===o&&w.r===r&&w.c===c));}
+  function edgeBlocked(r1,c1,r2,c2){
+    for(const arr of state.walls) for(const w of arr){
+      if(r1===r2){
+        if(w.o==='V' && w.c===Math.min(c1,c2) && (w.r===r1 || w.r===r1-1))return true;
+        if(w.o==='H' && (w.r===r1-1||w.r===r1) && (Math.min(c1,c2)===w.c||Math.min(c1,c2)===w.c+1) && w.r===Math.min(r1,r2)-1)return true;
+      } else if(c1===c2){
+        if(w.o==='H' && w.r===Math.min(r1,r2) && (w.c===c1||w.c===c1-1))return true;
+        if(w.o==='V' && (w.c===c1-1||w.c===c1) && (w.r===Math.min(r1,r2)||w.r===Math.min(r1,r2)+1))return true;
+      }
+    }
+    // Direct, standard wall-edge checks
+    for(const arr of state.walls)for(const w of arr){
+      if(w.o==='H' && r1!==r2 && Math.min(r1,r2)===w.r && (c1===w.c||c1===w.c+1))return true;
+      if(w.o==='V' && c1!==c2 && Math.min(c1,c2)===w.c && (r1===w.r||r1===w.r+1))return true;
+    }
+    return false;
+  }
+  function canStep(a,b){return b.r>=0&&b.r<9&&b.c>=0&&b.c<9&&!edgeBlocked(a.r,a.c,b.r,b.c);}
+  function legalMoves(player){
+    const me=state.pawns[player], op=state.pawns[1-player], out=[];
+    const dirs=[[-1,0],[1,0],[0,-1],[0,1]];
+    for(const [dr,dc] of dirs){
+      const n={r:me.r+dr,c:me.c+dc}; if(!canStep(me,n))continue;
+      if(n.r===op.r&&n.c===op.c){
+        const jump={r:op.r+dr,c:op.c+dc};
+        if(jump.r>=0&&jump.r<9&&jump.c>=0&&jump.c<9&&canStep(op,jump)){out.push(jump);}
+        else {
+          for(const [sr,sc] of [[-dc,dr],[dc,-dr]]){
+            const side={r:op.r+sr,c:op.c+sc};
+            if(side.r>=0&&side.r<9&&side.c>=0&&side.c<9&&canStep(op,side))out.push(side);
+          }
+        }
+      }else out.push(n);
+    }
+    return out;
+  }
+  function pathExists(player){
+    const start=state.pawns[player], target=player===0?0:8, q=[start], seen=new Set([start.r+','+start.c]);
+    while(q.length){const a=q.shift();if(a.r===target)return true;
+      for(const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]){
+        const b={r:a.r+dr,c:a.c+dc}, k=b.r+','+b.c;
+        if(b.r<0||b.r>8||b.c<0||b.c>8||seen.has(k)||edgeBlocked(a.r,a.c,b.r,b.c))continue;
+        seen.add(k);q.push(b);
+      }
+    }return false;
+  }
+  function wallValid(o,r,c){
+    if(o==='H'&&(r<1||r>8||c<0||c>7))return false;
+    if(o==='V'&&(c<1||c>8||r<0||r>7))return false;
+    // Same-orientation overlap, including sharing one segment; crossing is forbidden.
+    for(const arr of state.walls)for(const w of arr){
+      if(w.o===o){
+        if(o==='H'&&w.r===r&&Math.abs(w.c-c)<2)return false;
+        if(o==='V'&&w.c===c&&Math.abs(w.r-r)<2)return false;
+      } else if(w.r===r&&w.c===c)return false;
+    }
+    state.walls[myPlayer].push({o,r,c});
+    const ok=pathExists(0)&&pathExists(1);
+    state.walls[myPlayer].pop();
+    return ok;
+  }
+  function handleAction(a, player){
+    if(!state||state.over||state.turn!==player)return;
+    if(a.type==='move'){
+      const from=state.pawns[player], to={r:a.r,c:a.c};
+      if(!legalMoves(player).some(m=>m.r===to.r&&m.c===to.c)){sendToPlayer(player,'حرکت غیرمجاز است.');return;}
+      state.pawns[player]=to;
+      if((player===0&&to.r===0)||(player===1&&to.r===8)){state.over=true;state.winner=player;}
+      else state.turn=1-player;
+    }else if(a.type==='wall'){
+      if(state.walls[player].length>=10){sendToPlayer(player,'دیوارهایت تمام شده‌اند.');return;}
+      if(!wallValid(a.o,a.r,a.c)){sendToPlayer(player,'این دیوار قابل قرار دادن نیست؛ مسیر باید باز بماند.');return;}
+      state.walls[player].push({o:a.o,r:a.r,c:a.c});state.turn=1-player;
+    }
+    send({type:'state',state});render();
+  }
+  function sendToPlayer(player,t){if(player===myPlayer)notice(t);else send({type:'info',text:t});}
+  function act(a){if(!state||state.over)return;if(isHost)handleAction(a,0);else send({type:'action',action:a});}
+  function render(){
+    if(!state)return;
+    $('role').textContent='شما: بازیکن '+(myPlayer===0?'آبی':'قرمز');
+    $('w1').textContent=10-state.walls[0].length;$('w2').textContent=10-state.walls[1].length;
+    $('wallCount').textContent=(10-state.walls[0].length)+' - '+(10-state.walls[1].length);
+    $('p1').classList.toggle('active',!state.over&&state.turn===0);$('p2').classList.toggle('active',!state.over&&state.turn===1);
+    $('turn').textContent=state.over?'🏆 بازیکن '+(state.winner===0?'آبی':'قرمز')+' برنده شد!':'نوبت بازیکن '+(state.turn===0?'آبی':'قرمز')+(state.turn===myPlayer?' — نوبت شما':'');
+    const board=$('board');board.innerHTML='';
+    const moves=state.turn===myPlayer&&!state.over?legalMoves(myPlayer):[];
+    for(let gr=0;gr<17;gr++)for(let gc=0;gc<17;gc++){
+      const el=document.createElement('div');
+      if(gr%2===0&&gc%2===0){
+        el.className='cell';const r=gr/2,c=gc/2;
+        const pi=state.pawns.findIndex(p=>p.r===r&&p.c===c);
+        if(pi>=0){const pawn=document.createElement('div');pawn.className='pawn '+(pi===0?'one':'two');el.appendChild(pawn);}
+        if(moves.some(m=>m.r===r&&m.c===c)){el.style.background='#dceeff';el.style.outline='2px solid #8bbcf0';}
+        el.onclick=()=>{if(state.turn===myPlayer&&!state.over)act({type:'move',r,c});};
+      }else if(gr%2===1&&gc%2===0){
+        el.className='gap vslot';const r=(gr-1)/2,c=gc/2;
+        const wall=state.walls.flat().find(w=>w.o==='H'&&w.r===r+1&&w.c===c)||state.walls.flat().find(w=>w.o==='H'&&w.r===r+1&&w.c===c-1);
+        if(wall){const d=document.createElement('div');d.className='wallH';el.appendChild(d);}
+      }else if(gr%2===0&&gc%2===1){
+        el.className='gap hslot';const r=gr/2,c=(gc-1)/2;
+        const wall=state.walls.flat().find(w=>w.o==='V'&&w.c===c+1&&w.r===r)||state.walls.flat().find(w=>w.o==='V'&&w.c===c+1&&w.r===r-1);
+        if(wall){const d=document.createElement('div');d.className='wallV';el.appendChild(d);}
+      }else{
+        el.className='gap';
+      }
+      if(gr%2===1&&gc%2===0){
+        const r=(gr-1)/2,c=gc/2;
+        if(c<=7&&r>=0&&r<8){
+          el.classList.add('anchor');if(state.walls.flat().some(w=>w.o==='H'&&w.r===r+1&&w.c===c))el.classList.remove('anchor');
+          el.onclick=()=>{if(state.turn===myPlayer&&!state.over)act({type:'wall',o:'H',r:r+1,c});};
+        }
+      }else if(gr%2===0&&gc%2===1){
+        const r=gr/2,c=(gc-1)/2;
+        if(r<=7&&c>=0&&c<8){
+          el.classList.add('anchor');if(state.walls.flat().some(w=>w.o==='V'&&w.c===c+1&&w.r===r))el.classList.remove('anchor');
+          el.onclick=()=>{if(state.turn===myPlayer&&!state.over)act({type:'wall',o:'V',r,c:c+1});};
+        }
+      }
+      board.appendChild(el);
+    }
+    if(state.over)notice('بازی تمام شد؛ بازیکن '+(state.winner===0?'آبی':'قرمز')+' برنده است.');
+    else if(state.turn!==myPlayer)notice('منتظر حرکت بازیکن '+(state.turn===0?'آبی':'قرمز')+' بمان.');
+    else notice('نوبت شماست: خانه مجاور را برای حرکت یا فضای خط‌چین را برای دیوار لمس کن.');
+  }
+  $('newGameBtn').onclick=()=>{if(isHost){state=initialState();send({type:'state',state});render();}else send({type:'restart'});};
+  $('leaveBtn').onclick=()=>{if(conn)conn.close();if(peer)peer.destroy();conn=null;peer=null;state=null;$('game').style.display='none';$('connectPanel').style.display='block';setStatus('اتصال قطع شد. برای بازی جدید دوباره وصل شوید.');};
+})();
+</script>
+</body>
+</html>
